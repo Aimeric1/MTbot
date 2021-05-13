@@ -52,7 +52,7 @@ aclient = aiohttp.ClientSession()
 ##_________________Fonctions_Annexes____________________
 
 async def GetMTScore(idMT: int) :
-    async with session.get(f"http://mathraining.be/users/{idMT}") as response:
+    async with aclient.get(f"http://mathraining.be/users/{idMT}") as response:
         text = await response.text()
     soup = BeautifulSoup(text,"lxml")  #on récupère le code source de la page
     try : 

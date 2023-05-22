@@ -27,6 +27,9 @@ bot = commands.Bot(command_prefix='&', description='Bot Mathraining, merci aux g
 
 token = 'SECRET'
 
+id_mathraining = 'SECRET'
+mdp_mathraining = 'SECRET'
+
 NomsRoles = ["Grand Maitre", "Maitre", "Expert", "Chevronné", "Expérimenté", "Qualifié", "Compétent", "Initié", "Débutant", "Novice"]
 
 colors = {'Novice' : 0x888888, 'Débutant' : 0x08D508, 'Débutante' : 0x08D508, 'Initié' : 0x008800, 'Initiée' : 0x008800,
@@ -52,7 +55,7 @@ aclient = aiohttp.ClientSession()
 ##_________________Fonctions_Annexes____________________
 
 async def GetMTScore(idMT: int) :
-    async with session.get(f"http://mathraining.be/users/{idMT}") as response:
+    async with aclient.get(f"http://mathraining.be/users/{idMT}") as response:
         text = await response.text()
     soup = BeautifulSoup(text,"lxml")  #on récupère le code source de la page
     try : 
@@ -103,23 +106,25 @@ async def FindMT(idMT: int, canal) :
                 break
         return user #0 si n'est pas dans la liste
 
-def Connexion() :
-    global driver
-    driver = webdriver.Firefox(options=options)
-    driver.get("https://mathraining.be")
-    driver.find_element_by_link_text("Connexion").click()
-    username = driver.find_element_by_id("tf1")
-    username.clear();username.send_keys("SECRET")
+async def Connexion() :
+    async with aclient.get("https://www.mathraining.be/") as response:
+        text = await response.text()
+    soup = BeautifulSoup(text, "lxml")
+    token = soup.find(name="csrf-token").get("content")
+    bytetoken = token.encode()
+    byteident = id_mathraining.encode()
+    bytemdp = mdp_mathraining.encode()
+    data = b"utf8=%E2%9C%93&authenticity_token=" + bytetoken + b"&session%5Bemail%5D=" + byteident + b"&session%5Bpassword%5D=" + bytemdp + b"&session%5Bremember_me%5D=0&session%5Bremember_me%5D=1&commit=Connexion"
+    await aclient.post("https://www.mathraining.be/sessions", data=data)
     
-    password = driver.find_element_by_name("session[password]")
-    password.clear();password.send_keys("SECRET")
-    
-    driver.find_element_by_name("commit").click()    
-    
-def Deconnexion() :
-    driver.find_element_by_xpath("//a[not(contains(text(), 'Théorie')) and not(contains(text(), 'Statistiques')) and not(contains(text(), 'Problèmes')) and @class='dropdown-toggle']").click()
-    driver.find_element_by_link_text("Déconnexion").click()
-    driver.quit()
+async def Deconnexion() :
+    async with aclient.get("https://www.mathraining.be/") as response:
+        text = await response.text()
+    soup = BeautifulSoup(text, "lxml")
+    token = soup.find(name="csrf-token").get("content")
+    bytetoken = token.encode()
+    data = b"_method=delete&authenticity_token="+bytetoken
+    await aclient.post("https://www.mathraining.be/sessions", data=data)
     
 async def erreur(e,ctx=None) :
     err="- "+"[Erreur "+e+'] '+'-'*50+" [Erreur "+e+']'+" -"+'\n'+format_exc()+"- "+"[Erreur "+e+'] '+'-'*50+" [Erreur "+e+']'+" -";print(err)
@@ -203,14 +208,41 @@ async def ask(ctx,idMTnew: int):
             elif Score == 2 : await msay.edit(content="Le compte Mathraining renseigné n'existe pas !")
             else :
                 try :
-                    Connexion()
-                    driver.get("https://www.mathraining.be/discussions/new?qui="+str(idMTnew)) #Sélectionne automatiquement la personne dans les messages.
+                    await Connexion()
+                    async with aclient.get(f"https://www.mathraining.be/discussions/new?qui={idMTnew}") as response:  #Sélectionne automatiquement la personne dans les messages.
+                        text = await response.text()
+                    soup = BeautifulSoup(text, "lxml")
+                    token = soup.find(name="csrf-token").get("content")
                     msg="Bonjour !  :-)\n\n Vous avez bien demandé à relier votre compte mathraining avec le compte Discord [b]"+str(user)+"[/b] sur le [url=https://www.mathraining.be/subjects/365?q=0]serveur Mathraining[/url] ?\n Répondez [b]\"Oui\"[/b] (sans aucun ajout) à ce message pour confirmer votre demande, sinon par défaut vous ne serez pas relié. \n Vous devez ensuite taper la commande [b]&verify[/b] sur Discord pour finaliser la demande.\n\n [b]Seul le dernier message de cette conversation sera lu pour confirmer votre demande.[/b] \n[i][u]NB[/u] : Il s'agit d'un message automatique. N'espérez pas communiquer avec ce compte Mathraining.\n[/i]"
                     #supprimé : (A vrai dire, j'ai activé le service sur mon compte pour l'instant. Vous pouvez tout de même me parler ou me signaler un bug ...)
-                    m = driver.find_element_by_id("MathInput")
-                    m.clear();m.send_keys(msg)
-                    driver.find_element_by_name("commit").click()
-                    Deconnexion()
+                    data =  f"""-----------------------------144585532115742037403024478356
+Content-Disposition: form-data; name="utf8"
+
+✓
+-----------------------------144585532115742037403024478356
+Content-Disposition: form-data; name="authenticity_token"
+
+{token}
+-----------------------------144585532115742037403024478356
+Content-Disposition: form-data; name="tchatmessage[discussion_id]"
+
+{convid}
+-----------------------------144585532115742037403024478356
+Content-Disposition: form-data; name="stop"
+
+on
+-----------------------------144585532115742037403024478356
+Content-Disposition: form-data; name="content"
+
+{msg}
+-----------------------------144585532115742037403024478356
+Content-Disposition: form-data; name="commit"
+
+Envoyer
+-----------------------------144585532115742037403024478356--
+""".encode()
+                    await aclient.post("www.mathraining.be/tchatmessages", data=data)
+                    await Deconnexion()
                     await canalEnAttente.send(str(user.mention)+ " " + str(idMTnew))
                     await msay.edit(content="Vous venez de recevoir un message privé sur le site. Suivez les instructions demandées.")
                 except : await msay.edit(content="Ce service est temporairement indisponible, veuillez réessayer plus tard.\n Vous pouvez toutefois demander à un Admin ou un Modérateur de vous relier manuellement.")
@@ -243,8 +275,11 @@ async def verify(ctx,user2: Member = None,idMT2: int = 0):
             
         elif idMT!=0 :                            ##Sinon ignore les autres arguments ...
             try :
-                Connexion()
-                driver.get("https://www.mathraining.be/discussions/new?qui="+str(idMT))
+                await Connexion()
+                async with aclient.get(f"https://www.mathraining.be/discussions/new?qui={idMTnew}") as response:  #Sélectionne automatiquement la personne dans les messages.
+                    text = await response.text()
+                soup = BeautifulSoup(text, "lxml")
+                token = soup.find(name="csrf-token").get("content")
                 
                 if driver.find_element_by_xpath("//*[contains(@id, 'normal')]").text[:-20] in ['Oui','oui'] :##Si c'est 'Oui', c'est bon ! (En fait prend le premier avec un id avec 'normal')
                     msg="Vos comptes Discord et Mathraining sont désormais reliés !"
